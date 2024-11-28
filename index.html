@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>竹北高中 Excel 轉換工具</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center">Excel 轉 CSV 和 ICS</h1>
+        <div class="mt-4">
+            <label for="excelFile" class="form-label">上傳 Excel 文件</label>
+            <input type="file" id="excelFile" class="form-control" accept=".xlsx, .xls">
+        </div>
+        <div class="mt-3">
+            <button class="btn btn-primary" onclick="convertToCSV()">轉換為 CSV</button>
+            <button class="btn btn-success" onclick="convertToICS()">轉換為 ICS</button>
+        </div>
+        <div class="mt-4">
+            <p id="status" class="text-muted"></p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <script>
+        let csvData = '';
+
+        // 解析 Excel 文件為 CSV
+        function convertToCSV() {
+            const fileInput = document.getElementById('excelFile');
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('請先上傳 Excel 文件！');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                csvData = XLSX.utils.sheet_to_csv(firstSheet);
+                downloadFile('calendar.csv', csvData);
+                document.getElementById('status').textContent = 'CSV 文件已生成！';
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // 將 CSV 轉換為 ICS
+        function convertToICS() {
+            if (!csvData) {
+                alert('請先轉換為 CSV 文件！');
+                return;
+            }
+
+            const rows = csvData.split('\n');
+            let icsData = 'BEGIN:VCALENDAR\nVERSION:2.0\n';
+
+            rows.slice(1).forEach(row => {
+                const columns = row.split(',');
+
+                if (columns.length >= 2) {
+                    let [dateRange, eventName, time, description] = columns;
+                    if (!eventName) return;
+
+                    const { startDate, endDate } = parseDateRange(dateRange);
+                    const startTime = time ? `${startDate}T${time.replace(':', '')}00` : `${startDate}T000000`;
+                    const endTime = endDate ? `${endDate}T235959` : `${startDate}T235959`;
+
+                    icsData += 'BEGIN:VEVENT\n';
+                    icsData += `DTSTART:${startTime}\n`;
+                    icsData += `DTEND:${endTime}\n`;
+                    icsData += `SUMMARY:${eventName}\n`;
+                    if (description) icsData += `DESCRIPTION:${description}\n`;
+                    icsData += 'END:VEVENT\n';
+                }
+            });
+
+            icsData += 'END:VCALENDAR';
+            downloadFile('calendar.ics', icsData);
+            document.getElementById('status').textContent = 'ICS 文件已生成！';
+        }
+
+        // 解析日期範圍
+        function parseDateRange(dateRange) {
+            const dates = dateRange.split(' - ');
+            const startDate = dates[0]?.trim().replace(/-/g, '');
+            const endDate = dates[1]?.trim().replace(/-/g, '');
+            return { startDate, endDate };
+        }
+
+        // 下載文件
+        function downloadFile(filename, content) {
+            const blob = new Blob([content], { type: 'text/plain' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+        }
+    </script>
+</body>
+</html>
+
